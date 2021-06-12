@@ -23,13 +23,14 @@ def scrape_andersen():
     ul = soup.find('ul', class_='bluelink')
     links = [base_url + a['href'] for a in ul.find_all('a', href=True)]
 
-    # Create the output file if it does not already exist
+    # Create the output file and make sure that it's empty
     path = Path('data') / 'output.txt'
-    if not path.exists():
-        path.touch()
+    if path.exists():
+        path.unlink()
+    path.touch()
 
     # Scrape all fairytales
-    for link in tqdm(links):
+    for link in tqdm(links, desc='Scraping fairytales'):
 
         # Download the fairytale and extract the text, using the `newspaper3k`
         # library
@@ -39,25 +40,25 @@ def scrape_andersen():
         doc = article.text
 
         # Remove numbers, and split into sentences
-        doc = re.sub('["0-9]', '', doc)
-        doc = re.sub('! *', '!\n', doc)
-        doc = re.sub(r'[:;.] *', '.\n', doc)
+        doc = re.sub(r'[^a-zA-Z\æ\ø\å\Æ\Ø\Å\-,.:;! ]', '', doc.lower())
+        doc = re.sub(r'[:;.!] *', '.\n', doc)
 
-        # Remove duplicate line breaks
+        # Remove duplicate line breaks and whitespace
         doc = re.sub('\n+', '\n', doc)
+        doc = re.sub(' +', ' ', doc)
 
-        # Split into lines, and ensure that the lines has between 4 and 14
-        # words, as that's the requirement by CommonVoice. Altså ensure that
-        # the sentences are in title case
-        lines = [line.title() for line in doc.split('\n')
-                      if len(line.split()) >= 4 and len(line.split()) < 14]
+        # Strip the lines and make sure that the first letter is capitalised
+        lines = [line.strip('\-,.:;! ').capitalize()
+                 for line in doc.split('\n')]
 
-        # Filter the lines further by removing all the sentences starting with
-        # 'sagde' and 'råbte', and removing sentences which are just symbols
+        # Filter the lines
         lines = [line for line in lines
                       if len(re.sub('[^a-z]', '', line)) > 0 and
                          not line.lower().startswith('sagde') and
-                         not line.lower().startswith('råbte')]
+                         not line.lower().startswith('tænkte') and
+                         not line.lower().startswith('råbte') and
+                         len(line.split()) >= 4 and
+                         len(line.split()) < 14]
 
         # Join all the sentences into one long string
         doc = '\n'.join(lines)
